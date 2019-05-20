@@ -75,4 +75,15 @@ Enable SSH on router, then use your preferred SSH Client e.g. Xshell6,MobaXterm,
 
 	curl --retry 3 "https://raw.githubusercontent.com/MartineauUK/Chk-WAN/master/ChkWAN.sh" -o "/jffs/scripts/ChkWAN.sh" && chmod 755 "/jffs/scripts/ChkWAN.sh"
 
+You can manually test the script with the default PING method, and the script will simply passively report the status, rather proactively restart the WAN or REBOOT
 
+	./ChkWAN.sh noaction once nowait
+
+but for automated monitoring, you would include the call to the script in
+
+/jffs/scripts/wan-start
+	
+	sh /jffs/scripts/ChkWAN.sh &
+
+or use cru (cron) to schedule the script at a pre-determined scheduled time)
+NOTE: You could configure the cron schedule such that the scipt will restart the WAN say 3 times, but every fourth attempt will action the REBOOT.

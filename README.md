@@ -15,9 +15,9 @@ The monitoring method is either
 		ISP WAN_gateway
 		ISP_DNS 		x 2
 		8.8.8.8			(Google Primary DNS)
-		1.1.1.1			(Cloudflare Pimary DNS)
+		1.1.1.1			(Cloudflare Primary DNS)
 		
-		or a custom list of WAN PING targets e.g. ping=9.9.9.9
+		or a custom list of WAN PING targets e.g. ping=9.9.9.9,185.228.168.9 (Quad9 Primary DNS, Clean Browsing Primary)
 
 2.	A cURL data transfer retrieval from the WAN - either a 15 Byte (default) or either a ~500 Byte or 12MB. 
     (Beware if using a metered connection!)

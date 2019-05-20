@@ -20,9 +20,12 @@ The monitoring method is either
 		or a custom list of WAN PING targets e.g. ping=9.9.9.9,185.228.168.9 (Quad9 Primary DNS, Clean Browsing Primary)
 
 2.	A cURL data transfer retrieval from the WAN - either a 15 Byte (default) or either a ~500 Byte or 12MB. 
-    (Beware if using a metered connection!)
+   
+		**Beware if using a metered connection!**
+		
+		Optionally an expected transfer rate may be specified to perform the desired action if the transfer is deemed slow.
 
-    (Optionally an expected transfer rate may be specified to perform the desired action if the transfer is deemed slow.)
+NOTE: Only one of the test criteria needs to succeed, i.e. if 5 PING hosts are used, the test will terminate with the first successful host that responds to the PING - ignoring the others.
 
   To prevent transient false positives, the number of retries and a maximum number of fails permitted for each method defaults to       retries=3 and fails=3, and be tailored
   e.g. retries=1 fails=1 whilst the result being immediate, may seemingly fail, due to the PING or cURL target entity being briefly   unavailable 

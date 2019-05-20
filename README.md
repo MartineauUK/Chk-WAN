@@ -17,7 +17,7 @@ The monitoring method is either
 		8.8.8.8			(Google Primary DNS)
 		1.1.1.1			(Cloudflare Pimary DNS)
 		
-		or a custom list of WAN PING targets
+		or a custom list of WAN PING targets e.g. ping=9.9.9.9
 
 2.	A cURL data transfer retrieval from the WAN - either a 15 Byte (default) or either a ~500 Byte or 12MB. 
     (Beware if using a metered connection!)
@@ -25,7 +25,7 @@ The monitoring method is either
     (Optionally an expected transfer rate may be specified to perform the desired action if the transfer is deemed slow.)
 
   To prevent transient false positives, the number of retries and a maximum number of fails permitted for each method defaults to       retries=3 and fails=3, and be tailored
-  e.g. retries=1 fails whilst the result being immediate, may seemingly fail, due to the PING or cURL target entity being briefly   unavailable 
+  e.g. retries=1 fails=1 whilst the result being immediate, may seemingly fail, due to the PING or cURL target entity being briefly   unavailable 
 
 The complete list of command options may be retrieved using
   

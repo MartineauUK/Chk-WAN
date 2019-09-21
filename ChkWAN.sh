@@ -1,6 +1,6 @@
 #!/bin/sh
-VER="v1.11"
-#============================================================================================ © 2016-2018 Martineau v1.11
+VER="v1.12"
+#============================================================================================ © 2016-2019 Martineau v1.12
 #
 # Monitor WAN connection state using PINGs to multiple hosts, or a single cURL 15 Byte data request and optionally a 12MB/500B WGET/CURL data transfer.
 #         NOTE: The cURL data transfer rate/perfomance threshold may also be checked e.g. to switch from a 'slow' (Dual) WAN interface.
@@ -8,7 +8,7 @@ VER="v1.11"
 #
 # Usage:    ChkWAN  [help|-h]
 #                   [reboot | wan | noaction] [force[big | small]] [nowait] [quiet] [once] [i={[wan0|wan1]}] [googleonly] [curl] [ping='ping_target[,..]'] 
-#                   [tries=number] [fails=number] [curlrate=number]
+#                   [tries=number] [fails=number] [curlrate=number] [verbose]
 #
 #           ChkWAN
 #                   Will REBOOT router if the PINGs to ALL of the hosts FAILS
@@ -36,12 +36,15 @@ VER="v1.11"
 #                   Reduce the number of retry attempts to 1 instead of the default 3 and maximum number of fails is 1 rather than 3
 #           ChkWAN  force curlrate=1000000
 #                   If the 12MB average curl transfer rate is <1000000 Bytes per second (1MB), then treat this as a FAIL
+#           ChkWAN  curl verbose
+#                   The 'verbose' directive applies to any cURL transfer, and will display the cURL request data transfer as it happens
 
 # [URL="https://www.snbforums.com/threads/need-a-script-that-auto-reboot-if-internet-is-down.43819/#post-371791"]Need a script that auto reboot if internet is down[/URL]
 
 ShowHelp() {
 	awk '/^#==/{f=1} f{print; if (!NF) exit}' $0
 }
+# shellcheck disable=SC2034
 ANSIColours() {
 
 	cRESET="\e[0m";cBLA="\e[30m";cRED="\e[31m";cGRE="\e[32m";cYEL="\e[33m";cBLU="\e[34m";cMAG="\e[35m";cCYA="\e[36m";cGRA="\e[37m"
@@ -91,6 +94,9 @@ Check_WAN(){
     CNT=0
     STATUS=0
 
+	local SILENT="-s"								# v1.12
+	[ -n "$CMDVERBOSE" ] && SILENT=""				# v1.12 Allow verbose cURL transfer details to be displayed on screen
+	
 	local PING_INTERFACE=
 	local CURL_INTERFACE=
 	if [ -n "$DEV" ];then							# Specific interface requested?
@@ -117,7 +123,8 @@ Check_WAN(){
 				fi
 		done
 	else
-		IP=$(curl $CURL_INTERFACE --connect-timeout 5 -s "http://ipecho.net/plain")		# Max 15 char retrieval
+		# Max 15 char retrieval
+		IP=$(curl $CURL_INTERFACE --connect-timeout 5 $SILENT "http://ipecho.net/plain")		# v1.12 add $SILENT
 		if [ -n "$IP" ];then
 			STATUS=1
 		fi
@@ -136,30 +143,39 @@ Check_WAN(){
 				CURL_TXT="Starting cURL 'small' data transfer.....(Expect 500Byte download = <1 second)"
 			fi
 			Say $CURL_TXT
-			if [ -n "TXT_RATE" ];then
+			if [ -n "$TXT_RATE" ];then						# Fix v1.11
 				Say $TXT_RATE
 			fi
 			echo -en $cBYEL
 		fi
 		WGET_DATA=$2
 		#wget -O /dev/null -t2 -T2 $WGET_DATA
-		RESULTS=$(curl $CURL_INTERFACE  -s $WGET_DATA -w "%{time_connect},%{time_total},%{speed_download},%{http_code},%{size_download},%{url_effective}\n" -o /dev/null)
+		RESULTS=$(curl $CURL_INTERFACE $SILENT $WGET_DATA -w "%{time_connect},%{time_total},%{speed_download},%{http_code},%{size_download},%{url_effective}\n" -o /dev/null) # v1.12 Add $SILENT
 		RC=$?
-		if [ $RC -eq 0 ];then
-			STATUS=1
-			FORCE_OK=1												# Used to make this a priority status summary
+		RC18=$RC
+		TXTINTERRUPTED=
+		if [ $RC18 -eq 18 ] || [ $RC -eq 0 ];then		# v1.12 Allow rc=18 i.e. means TOTAL transfer didn't complete?
+			[ $RC18 -eq 18 ] &&  { echo -e $cBRED; TXTINTERRUPTED="**Warning: INTERRUPTED; i.e. cut-short"; }	# v1.12 Mark interrupted transfer results as 'error'
 			case "$2" in
-				"$FORCE_WGET_12MB") Say "cURL $(($(echo $RESULTS | cut -d',' -f5)/1000000))MByte transfer took:" $(printf "00:%05.2f secs @%6.0f B/sec" "$(echo $RESULTS | cut -d',' -f2)" "$(echo $RESULTS | cut -d',' -f3)")
+				"$FORCE_WGET_12MB") Say "$TXTINTERRUPTED cURL $(($(echo $RESULTS | cut -d',' -f5)/1000000))MByte transfer took:" $(printf "00:%05.2f secs @%6.0f B/sec" "$(echo $RESULTS | cut -d',' -f2)" "$(echo $RESULTS | cut -d',' -f3)")
 									;;
-				"$FORCE_WGET_500B") Say "cURL $(($(echo $RESULTS | cut -d',' -f5)))Byte transfer took:" $(printf "00:%05.2f secs @%6.0f B/sec" "$(echo $RESULTS | cut -d',' -f2)" "$(echo $RESULTS | cut -d',' -f3)")
+				"$FORCE_WGET_500B") Say "$TXTINTERRUPTED cURL $(($(echo $RESULTS | cut -d',' -f5)))Byte transfer took:" $(printf "00:%05.2f secs @%6.0f B/sec" "$(echo $RESULTS | cut -d',' -f2)" "$(echo $RESULTS | cut -d',' -f3)")
 									;;
-				*)					Say "cURL $(($(echo $RESULTS | cut -d',' -f5)))transfer took:" $(printf "00:%05.2f secs" "$(echo $RESULTS | cut -d',' -f2)")
+				*)					Say "$TXTINTERRUPTED cURL $(($(echo $RESULTS | cut -d',' -f5)))transfer took:" $(printf "00:%05.2f secs" "$(echo $RESULTS | cut -d',' -f2)")
 									;;
 			esac
+			#if [ $RC18 -eq 18 ];then
+				#STATUS=0
+				#FORCE_OK=0									
+			#else
+				STATUS=1
+				FORCE_OK=1												# Used to make this a priority status summary
+			#fi
 			
 			# Check if transfer rate is less than the specified acceptable rate 
 			#Say "***DEBUG FORCE_WGET_MIN_RATE="$FORCE_WGET_MIN_RATE
-			if [ $(echo $RESULTS | cut -d',' -f3 | cut -d'.' -f1) -lt $FORCE_WGET_MIN_RATE ];then
+			# v1.12 Only report 'slow' transfer rate for a completed transfer - i.e. partial (rc=18) shouldn't be checked!
+			if [ $RC -eq 0 ] && [ $(echo $RESULTS | cut -d',' -f3 | cut -d'.' -f1) -lt $FORCE_WGET_MIN_RATE ];then
 				STATUS=0
 				echo -en $cBRED"\n\a"
 				Say "***ERROR cURL file transfer rate '"$(echo $RESULTS | cut -d',' -f3 | cut -d'.' -f1)"' Bytes/sec, is less than the acceptable minimum specified '"$FORCE_WGET_MIN_RATE"' Bytes/sec" 
@@ -179,7 +195,7 @@ Check_WAN(){
 	fi
 }
 #=============================================================Main==============================================================
-Main(){}
+Main() { true; }			# Syntax that is Atom Shellchecker compatible!
 
 ANSIColours
 
@@ -219,16 +235,20 @@ if [ -n "$1" ];then
 	if [ "$(echo $@ | grep -cw 'wan')" -gt 0 ];then
 		ACTION="WANONLY"
 	fi
-
-	# cURL transfer....so allow specification of minimum transfer rate to be provided by User
-	if [ "$(echo $@ | grep -cw 'force')" -gt 0 ] || [ "$(echo $@ | grep -cw 'forcebig')" -gt 0 ] || [ "$(echo $@ | grep -cw 'forcesmall')" -gt 0 ];then
 	
+	# v1.12 'verbose' option is allowed for the cURL requests
+	[ "$(echo $@ | grep -cw 'verbose')" -gt 0 ] && CMDVERBOSE="Y"
+		
+	if [ "$(echo $@ | grep -cw 'force')" -gt 0 ] || [ "$(echo $@ | grep -cw 'forcebig')" -gt 0 ] || [ "$(echo $@ | grep -cw 'forcesmall')" -gt 0 ];then
 		if [ "$(echo $@ | grep -cw 'forcesmall')" -gt 0 ];then
 			FORCE_WGET=$FORCE_WGET_500B
 		else
 			FORCE_WGET=$FORCE_WGET_12MB
 		fi
-	
+		
+
+		
+		# cURL transfer....so allow specification of minimum transfer rate to be provided by User
 		if [ "$(echo $@ | grep -c 'curlrate=')" -gt 0 ];then				# v1.09 Minimum acceptable cURL transfer rate specified? 
 			FORCE_WGET_MIN_RATE="$(echo "$@" | sed -n "s/^.*curlrate=//p" | awk '{print $1}' | grep -E "[[:digit:]]")"
 			if [ -z "$FORCE_WGET_MIN_RATE" ];then

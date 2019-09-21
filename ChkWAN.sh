@@ -1,6 +1,6 @@
 #!/bin/sh
-VER="v1.12"
-#============================================================================================ © 2016-2019 Martineau v1.12
+VER="v1.13"
+#============================================================================================ © 2016-2019 Martineau v1.13
 #
 # Monitor WAN connection state using PINGs to multiple hosts, or a single cURL 15 Byte data request and optionally a 12MB/500B WGET/CURL data transfer.
 #         NOTE: The cURL data transfer rate/perfomance threshold may also be checked e.g. to switch from a 'slow' (Dual) WAN interface.
@@ -308,13 +308,13 @@ else
 		if [ "$(echo $@ | grep -c 'ping=')" -gt 0 ];then
 			HOSTS="$(echo "$@" | sed -n "s/^.*ping=//p" | awk '{print $1}' | tr ',' ' ')"		# Custom .CSV list specified
 		else
-			if [ "$DEV" != "ppp0" ];then
+			#if [ "$DEV" != "ppp0" ];then			# v1.13 Don't differentiate PING targets for 'ppp0' & use Quad9 instead of Google
 				# List of PING hosts to check...the 1st I/P is usually the appropriate default gateway (except for ppp0!) for the specified WAN interface,
 				# Include 												Google/Cloudflare public DNS
-				HOSTS="$(nvram get ${THIS}_gateway) $(nvram get wan_dns) 8.8.8.8 1.1.1.1"		# Target PING hosts
-			else
-				HOSTS="$(nvram get wan_dns) 8.8.8.8 1.1.1.1"		# Target PING hosts excludes the non-PINGable ppp0!
-			fi
+				HOSTS="$(nvram get ${THIS}_gateway) $(nvram get ${THIS}_dns) 9.9.9.9 1.1.1.1"		# Target PING hosts
+			#else
+				#HOSTS="$(nvram get ${THIS}_dns) 9.9.9.9 1.1.1.1"		# Target PING hosts includes multiple DNS?
+			#fi
 		fi
 	fi
 fi

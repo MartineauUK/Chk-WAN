@@ -1,14 +1,14 @@
 #!/bin/sh
-VER="v1.13"
-#============================================================================================ © 2016-2019 Martineau v1.13
+VER="v1.15"
+#============================================================================================ © 2016-2020 Martineau v1.15
 #
 # Monitor WAN connection state using PINGs to multiple hosts, or a single cURL 15 Byte data request and optionally a 12MB/500B WGET/CURL data transfer.
 #         NOTE: The cURL data transfer rate/perfomance threshold may also be checked e.g. to switch from a 'slow' (Dual) WAN interface.
 #         Usually the Recovery action (REBOOT or restart the WAN) occurs in about 90 secs (PING ONLY) or in about 03:30 mins for 'force' data download
 #
 # Usage:    ChkWAN  [help|-h]
-#                   [reboot | wan | noaction] [force[big | small]] [nowait] [quiet] [once] [i={[wan0|wan1]}] [googleonly] [curl] [ping='ping_target[,..]'] 
-#                   [tries=number] [fails=number] [curlrate=number] [verbose]
+#                   [reboot | wan | noaction] [force[big | small]] [nowait] [quiet] [once] [i={[wan0|wan1]}] [googleonly] [curl] [ping='ping_target[,..]']
+#                   [tries=number] [fails=number] [curlrate=number] [verbose] [cron[=[cron_spec]]] [status] [stop
 #
 #           ChkWAN
 #                   Will REBOOT router if the PINGs to ALL of the hosts FAILS
@@ -17,13 +17,22 @@ VER="v1.13"
 #           ChkWAN  forcesmall
 #                   Will REBOOT router if the PINGs to ALL of the hosts FAIL, but after each group PING attempt, a physical 500Byte data download is attempted.
 #                   (For users on a metered connection assuming that the 15Byte cURL is deemed unreliable?)
+#           ChkWAN  status
+#                   Will report if Check WAN monitor is running
 #           ChkWAN  wan
 #                   Will restart the WAN interface (instead of a FULL REBOOT) if the PINGs to ALL of the hosts FAIL
+#           ChkWAN  stop
+#                   Will request termination of script. It will be dependent on the 'sleep' interval
+#                   NOTE: If scheduled by cron this will have no effect.
 #           ChkWAN  curl
 #                   Will REBOOT router if cURL (i.e. NO PINGs attempted) fails to retrieve the remote end-point IP address of the WAN (Max 15bytes)
 #           ChkWAN  cron
+#                   Will REBOOT router if the PINGs to ALL of the hosts FAILS, cron entry is added: Runs every 30mins.
+#                   'cru a ChkWAN "*/30 * * * * /jffs/scripts/ChkWAN.sh"'
+#           ChkWAN  cron=\*/5
 #                   Will REBOOT router if the PINGs to ALL of the hosts FAILS, cron entry is added: Runs every 5mins.
 #                   'cru a ChkWAN "*/5 * * * * /jffs/scripts/ChkWAN.sh"'
+#                   NOTE: You need to escape the '*' on the commandline :-(
 #           ChkWAN  nowait
 #                   By default the script will wait 10 secs before actually starting the check; 'nowait' (when used by cron) skips this delay.
 #           ChkWAN  googleonly
@@ -38,6 +47,17 @@ VER="v1.13"
 #                   If the 12MB average curl transfer rate is <1000000 Bytes per second (1MB), then treat this as a FAIL
 #           ChkWAN  curl verbose
 #                   The 'verbose' directive applies to any cURL transfer, and will display the cURL request data transfer as it happens
+#
+# Cron schedule may be reset /jffs/scripts/ChkWAN_Reset_CRON.sh if you have:
+#
+#      Set up a static cron schedule every 10 minutes 2 times WAN Restart 3rd REBOOT
+#	            cru a Restart_WAN 00,10,30,40 * * * * /jffs/scripts/ChkWAN.sh wan force nowait
+#	            cru a Reboot_WAN 20,50 * * * * /jffs/scripts/ChkWAN.sh reboot force nowait
+#      but /jffs/scripts/ChkWAN_Reset_CRON.sh can change after very successful WAN UP check (Syslog monitor is better!!!?)
+#               cru a Restart_WAN 28,38,58,8 * * * * /jffs/scripts/ChkWAN.sh wan force nowait
+#               cru a Reboot_WAN 48,18 * * * * /jffs/scripts/ChkWAN.sh reboot force nowait
+
+
 
 # [URL="https://www.snbforums.com/threads/need-a-script-that-auto-reboot-if-internet-is-down.43819/#post-371791"]Need a script that auto reboot if internet is down[/URL]
 
@@ -70,11 +90,11 @@ Is_Private_IPv4() {
 Get_WAN_IF_Name () {
 
 	local INDEX=0
-	
+
 	if [ -n "$1" ];then
 		local INDEX=$1
 	fi
-	
+
 	local IF_NAME=$(nvram get wan${INDEX}_ifname)				# DHCP/Static ?
 
 	# Usually this is probably valid for both eth0/ppp0e ?
@@ -91,12 +111,12 @@ Get_WAN_IF_Name () {
 }
 Check_WAN(){
 
-    CNT=0
-    STATUS=0
+	CNT=0
+	STATUS=0
 
 	local SILENT="-s"								# v1.12
 	[ -n "$CMDVERBOSE" ] && SILENT=""				# v1.12 Allow verbose cURL transfer details to be displayed on screen
-	
+
 	local PING_INTERFACE=
 	local CURL_INTERFACE=
 	if [ -n "$DEV" ];then							# Specific interface requested?
@@ -112,7 +132,7 @@ Check_WAN(){
 	echo -en $cBYEL
 	if [ "$1" != "CURL" ];then								# Assume $1 is a PING target
 		while [ $CNT -lt $TRIES ]; do
-				ping $PING_INTERFACE -q -c 1 -W 2 $1 2> /dev/null
+				ping $PING_INTERFACE -q -c 1 -W 2 $1 > /dev/null
 				local RC=$?
 				if [ $RC -eq 0 ];then
 					STATUS=1
@@ -150,11 +170,13 @@ Check_WAN(){
 		fi
 		WGET_DATA=$2
 		#wget -O /dev/null -t2 -T2 $WGET_DATA
+		METHOD="cURL data retrieval"						# v1.14
 		RESULTS=$(curl $CURL_INTERFACE $SILENT $WGET_DATA -w "%{time_connect},%{time_total},%{speed_download},%{http_code},%{size_download},%{url_effective}\n" -o /dev/null) # v1.12 Add $SILENT
 		RC=$?
 		RC18=$RC
 		TXTINTERRUPTED=
-		if [ $RC18 -eq 18 ] || [ $RC -eq 0 ];then		# v1.12 Allow rc=18 i.e. means TOTAL transfer didn't complete?
+		# v1.12 Allow rc=18 i.e. means TOTAL transfer didn't complete?
+		if { [ $RC18 -eq 18 ] || [ $RC -eq 0 ]; } && [ $(echo $RESULTS | cut -d',' -f5) -gt 0 ];then		# v1.14 RC=0 yet bytes transferred=0 WTF!!!! so treat as error.
 			[ $RC18 -eq 18 ] &&  { echo -e $cBRED; TXTINTERRUPTED="**Warning: INTERRUPTED; i.e. cut-short"; }	# v1.12 Mark interrupted transfer results as 'error'
 			case "$2" in
 				"$FORCE_WGET_12MB") Say "$TXTINTERRUPTED cURL $(($(echo $RESULTS | cut -d',' -f5)/1000000))MByte transfer took:" $(printf "00:%05.2f secs @%6.0f B/sec" "$(echo $RESULTS | cut -d',' -f2)" "$(echo $RESULTS | cut -d',' -f3)")
@@ -166,30 +188,31 @@ Check_WAN(){
 			esac
 			#if [ $RC18 -eq 18 ];then
 				#STATUS=0
-				#FORCE_OK=0									
+				#FORCE_OK=0
 			#else
 				STATUS=1
 				FORCE_OK=1												# Used to make this a priority status summary
 			#fi
-			
-			# Check if transfer rate is less than the specified acceptable rate 
+
+			# Check if transfer rate is less than the specified acceptable rate
 			#Say "***DEBUG FORCE_WGET_MIN_RATE="$FORCE_WGET_MIN_RATE
 			# v1.12 Only report 'slow' transfer rate for a completed transfer - i.e. partial (rc=18) shouldn't be checked!
 			if [ $RC -eq 0 ] && [ $(echo $RESULTS | cut -d',' -f3 | cut -d'.' -f1) -lt $FORCE_WGET_MIN_RATE ];then
 				STATUS=0
 				echo -en $cBRED"\n\a"
-				Say "***ERROR cURL file transfer rate '"$(echo $RESULTS | cut -d',' -f3 | cut -d'.' -f1)"' Bytes/sec, is less than the acceptable minimum specified '"$FORCE_WGET_MIN_RATE"' Bytes/sec" 
+				Say "***ERROR cURL file transfer rate '"$(echo $RESULTS | cut -d',' -f3 | cut -d'.' -f1)"' Bytes/sec, is less than the acceptable minimum specified '"$FORCE_WGET_MIN_RATE"' Bytes/sec"
 				echo -en $cBYEL
 				METHOD=" using MINIMIUM acceptable cURL transfer rate"
 			fi
 		else
 			echo -en $cBRED
-			Say "***ERROR WGET '"$WGET_DATA"' transfer FAILED RC="$RC
+			Say "***ERROR cURL '"$WGET_DATA"' transfer FAILED RC="$RC
+			echo -n
 			FORCE_OK=0
 			if [ $RC -ne 8 ];then
 				STATUS=0												# Override PING/curl status!!
 			else
-				Say "*Warning WGET '"$WGET_DATA"' URL invalid?"		# URL invalid so could be OFFLINE so ignore it
+				Say "*Warning cURL '"$WGET_DATA"' URL invalid?"		# URL invalid so could be OFFLINE so ignore it
 			fi
 		fi
 	fi
@@ -199,8 +222,14 @@ Main() { true; }			# Syntax that is Atom Shellchecker compatible!
 
 ANSIColours
 
-MYROUTER=$(nvram get computer_name)
+# v384.13+ NVRAM variable 'lan_hostname' supersedes 'computer_name'
+[ -n "$(nvram get computer_name)" ] && MYROUTER=$(nvram get computer_name) || MYROUTER=$(nvram get lan_hostname)		# v1.15
+
+trap '' SIGHUP					# v1.15 Since 'nohup' doesn't work; Allow starting this script as a background task from command line!
+
 FIRMWARE=$(echo $(nvram get buildno) | awk 'BEGIN { FS = "." } {printf("%03d%02d",$1,$2)}')
+
+SNAME="${0##*/}"							# Script name
 
 # Can only run in Router Mode;
 #if [ "$(Check_Router_Mode)" != "Router" ];then
@@ -214,9 +243,46 @@ FORCE_WGET_500B="http://proof.ovh.net/files/md5sum.txt"
 FORCE_WGET_12MB="http://proof.ovh.net/files/100Mb.dat"
 FORCE_WGET=
 FORCE_OK=0
-FORCE_WGET_MIN_RATE=0										# v1.09 Minimum acceptable transfer rate in Bytes per second 
+FORCE_WGET_MIN_RATE=0										# v1.09 Minimum acceptable transfer rate in Bytes per second
 
 QUIET=
+
+MOUNT="/tmp"												# v1.15
+# Single instance semaphore
+LOCKFILE=${MOUNT}"/"$(basename $0)"-running"				# v1.15
+
+if [ "$1" == "status" ];then						# v1.15
+	if [ -n "$(ps -w | grep $(basename $0) | grep -v "grep $(basename $0)" | grep -v "status")" ];then
+		echo -e $cBGRE"\n"
+		if [ -f $LOCKFILE ];then					# v1.05
+			Say "$VER Check WAN monitor ACTIVE" $(grep -oE "PID=[0-9]*" $LOCKFILE)
+		else
+			echo -e $cBYEL"\n"
+			Say "$VER Check WAN monitor termination request pending....."		# v1.05
+		fi
+		echo -e $cRESET
+		exit
+	else
+		echo -e $cBMAG"\n"
+		Say "$VER Check WAN monitor not running"
+		echo -e $cRESET
+		exit
+		fi
+fi
+
+if [ "$1" == "stop" ];then
+	if [ -f $LOCKFILE ];then						# v1.05
+		echo -e $cGRE"\n"
+		Say "$VER Check WAN monitor Termination requested" $(grep -oE "PID=[0-9]*" $LOCKFILE)
+		mv $LOCKFILE ${MOUNT}"/"$(basename $0)-$(date +"%Y%m%d-%H%M%S")
+		echo -e $cRESET
+		exit 0
+	else
+		[ -z "$(ps -w | grep $(basename $0) | grep -v "grep $(basename $0)" | grep -v "stop")" ] && { echo -e $cBCYA"\n\t"; Say "Check WAN Monitor not running"; }
+		echo -e $cRESET							# v1.05 Bug Fix i.e. don't start the monitor if 'stop' requested and it is already DOWN
+		exit 0
+	fi
+fi
 
 # Validate args if supplied
 if [ -n "$1" ];then
@@ -235,21 +301,21 @@ if [ -n "$1" ];then
 	if [ "$(echo $@ | grep -cw 'wan')" -gt 0 ];then
 		ACTION="WANONLY"
 	fi
-	
+
 	# v1.12 'verbose' option is allowed for the cURL requests
 	[ "$(echo $@ | grep -cw 'verbose')" -gt 0 ] && CMDVERBOSE="Y"
-		
+
 	if [ "$(echo $@ | grep -cw 'force')" -gt 0 ] || [ "$(echo $@ | grep -cw 'forcebig')" -gt 0 ] || [ "$(echo $@ | grep -cw 'forcesmall')" -gt 0 ];then
 		if [ "$(echo $@ | grep -cw 'forcesmall')" -gt 0 ];then
 			FORCE_WGET=$FORCE_WGET_500B
 		else
 			FORCE_WGET=$FORCE_WGET_12MB
 		fi
-		
 
-		
+
+
 		# cURL transfer....so allow specification of minimum transfer rate to be provided by User
-		if [ "$(echo $@ | grep -c 'curlrate=')" -gt 0 ];then				# v1.09 Minimum acceptable cURL transfer rate specified? 
+		if [ "$(echo $@ | grep -c 'curlrate=')" -gt 0 ];then				# v1.09 Minimum acceptable cURL transfer rate specified?
 			FORCE_WGET_MIN_RATE="$(echo "$@" | sed -n "s/^.*curlrate=//p" | awk '{print $1}' | grep -E "[[:digit:]]")"
 			if [ -z "$FORCE_WGET_MIN_RATE" ];then
 				echo -en $cBRED"\a\n\t"
@@ -267,7 +333,7 @@ if [ -n "$1" ];then
 	if [ "$(echo $@ | grep -cw 'once')" -gt 0 ];then
 		ONCE="once"
 	fi
-	
+
 	WAN_NAME="WAN"
 	THIS="wan0"
 	DEV=
@@ -284,15 +350,21 @@ if [ -n "$1" ];then
 		fi
 	fi
 
-	if [ "$(echo $@ | grep -cw 'cron')" -gt 0 ];then
-		if [ -n "$(cru l | grep "$0")" ];then
-			CRON_ARGS=$(echo $@ | sed -e 's/\<cron\>//g')	# Strip 'cron' from being passed to the cru entry
-			cru d Wan_Check
-			cru a Wan_Check "*/30 0 * * * /jffs/scripts/$0 $CRON_ARGS"		# Every 30 mins on the half hour
-			CRONJOB=$(cru l | grep "$0")
-			Say "ChkWAN scheduled by cron"
-			echo -e "$CRONJOB"
+	if [ "$(echo "$@" | grep -c 'cron')" -gt 0 ];then				# v1.15
+		CRON_SPEC=$(echo "$@" | sed -n "s/^.*cron=//p" | awk '{print $0}')
+		cru d WAN_Check
+		if [ -z "$CRON_SPEC" ];then
+			cru a WAN_Check "*/30 * * * * /jffs/scripts/$SNAME wan nowait once"		# Every 30 mins on the half hour v1.15
+		else
+			[ $(echo $CRON_SPEC | wc -w) -eq 1 ] && CRON_SPEC=$CRON_SPEC" \* \* \* \*"		# Allow just the Minutes argument
+			cru a WAN_Check "$(echo $CRON_SPEC | tr -d '\') /jffs/scripts/$SNAME"
 		fi
+		CRONJOB=$(cru l | grep "$0")
+		SayT "ChkWAN scheduled by cron"
+		echo -en $cBCYA"\n\tChkWAN scheduled by cron\n\n\t"$cBGRE
+		cru l | grep $0
+		cru l | grep $0 >>/tmp/syslog.log
+		echo -e $cRESET
 	fi
 
 fi
@@ -326,10 +398,10 @@ fi
 
 # Help request ?
 if [ "$1" == "help" ] || [ "$1" == "-h" ];then
-   echo -e $cBWHT
-   ShowHelp							# Show help
-   echo -e $cRESET
-   exit 0
+	echo -e $cBWHT
+	ShowHelp							# Show help
+	echo -e $cRESET
+	exit 0
 fi
 
 
@@ -339,7 +411,7 @@ TRIES=3										# TRIES=3 With 5 hosts and PING ONLY usually recovery action is
 if [ "$(echo $@ | grep -c 'tries=')" -gt 0 ];then
 	TRIES="$(echo "$@" | sed -n "s/^.*tries=//p" | awk '{print $1}')"		# Custom number of tries
 fi
-											
+
 # How often to check if WAN connectivity is found to be OK
 INTERVAL_SECS=30
 
@@ -367,10 +439,17 @@ if [ "$HOSTS" == "CURL CURL" ];then
 	TXT="using cURL data IP retrieval method"
 fi
 
-if [ "$QUIET" != "quiet" ];then
+
+FD=166									# v1.15
+eval exec "$FD>$LOCKFILE"
+flock -n $FD || { Say "$VER Check WAN monitor ALREADY running...ABORTing"; exit; }		# v1.15
+
+#if [ "$QUIET" != "quiet" ];then
 	echo -e $cBMAG
+	sleep 1
+	echo -e $(date)" Check WAN Monitor started.....PID="$$ >> $LOCKFILE
 	Say $VER "Monitoring" $WAN_NAME $DEV_TXT "connection using" $TXT "(Tries="$TRIES")"
-fi
+#fi
 
 
 if [ "$QUIET" != "quiet" ];then
@@ -379,8 +458,8 @@ if [ "$QUIET" != "quiet" ];then
 fi
 
 while [ $FAIL_CNT -lt $MAX_FAIL_CNT ]; do
-    for TARGET in $HOSTS; do
-        UP=0;
+	for TARGET in $HOSTS; do
+		UP=0;
 		IP=
 
 		# Check if PING target is 'private'; indicating ASUS is behind another router (double NAT) or DNS is a local server
@@ -402,18 +481,19 @@ while [ $FAIL_CNT -lt $MAX_FAIL_CNT ]; do
 					fi
 				fi
 				Say $VER "Monitoring" $WAN_NAME $DEV_TXT "connection" $METHOD "check FAILED"
+				echo -e								# v1.14
 			fi
 		fi
-    done
+	done
 
-    if [ $UP -gt 0 ]; then
-        FAIL_CNT=0
+	if [ $UP -gt 0 ]; then
+	FAIL_CNT=0
 		echo -e $cBGRE
 		TXT="Successful ping to '"$TARGET"'"
 		if [ "$HOSTS" == "CURL CURL" ];then
 			TXT="cURL successfully retrieved WAN end-point IP='"$IP"'"
 		fi
-		
+
 		if [ "$FORCE_OK" -eq 1 ];then
 			if [ "$FORCE_WGET" == "$FORCE_WGET_12MB" ];then
 				TXT="using 'default' 12MByte cURL data transfer OK"
@@ -421,8 +501,9 @@ while [ $FAIL_CNT -lt $MAX_FAIL_CNT ]; do
 				TXT="using 'small' ~500Byte cURL data transfer OK"
 			fi
 		fi
-		
-		if [ -z "$(cru l | grep "$0")" ];then
+
+		# Is there a cron schedule?
+		if [ -z "$(cru l | grep "$SNAME")" ];then
 			if [ -z "$ONCE" ];then
 				if [ "$QUIET" != "quiet" ];then
 					Say "Monitoring" $WAN_NAME $DEV_TXT "connection OK.....("$TXT"). Will check" $WAN_NAME "again in" $INTERVAL_SECS "secs"
@@ -430,20 +511,27 @@ while [ $FAIL_CNT -lt $MAX_FAIL_CNT ]; do
 				fi
 
 				sleep $INTERVAL_SECS
+
 			else
 				Say "Monitoring" $WAN_NAME $DEV_TXT "connection OK.....("$TXT")."
 				echo -en $cRESET
+				flock -u $FD							# v1.15
 				exit 0
 			fi
 		else
+			# Should we RESET the cron i.e. ChkWAN_Reset_CRON.sh for Restart_WAN/Reboot_WAN (e.g. 2xWAN,3rd Reboot)
 			if [ "$QUIET" != "quiet" ];then
 				Say "Monitoring" $WAN_NAME $DEV_TXT "connection OK.....("$TXT"); Terminating due to ACTIVE cron schedule"
+				if [ -n "$(cru l | grep -oE "${SNAME}.*Restart_WAN")" ] &&  [ -n "$(cru l | grep -oE "${SNAME}.*Reboot_WAN")" ];then
+					[ -f /jffs/scripts/ChkWAN_Reset_CRON.sh ] &&  /jffs/scripts/ChkWAN_Reset_CRON.sh	# v1.15
+				fi
 				echo -e $cRESET
 			fi
+			flock -u $FD						# v1.15
 			exit 0
 		fi
-    else
-        FAIL_CNT=$((FAIL_CNT+1))
+	else
+	FAIL_CNT=$((FAIL_CNT+1))
 		if [ $FAIL_CNT -ge $MAX_FAIL_CNT ];then
 			break
 		fi
@@ -454,12 +542,24 @@ while [ $FAIL_CNT -lt $MAX_FAIL_CNT ]; do
 			Say "Monitoring pass" $(($FAIL_CNT+1)) "out of" $TRIES
 		fi
 		echo -en $cRESET
-    fi
+	fi
+
+
+	# Check for external kill switch; NOTE: Termination can be delayed for the sleep interval
+	if [ ! -f "$LOCKFILE" ];then
+		echo -en $cBYEL
+		Say "Check WAN external termination trigger.....terminating"
+		echo -e $cRESET
+		flock -u $FD
+		exit
+	fi
+
 done
 
 # Was 'noaction' specified ?									# v1.08
 if [ "$(echo $@ | grep -cw 'noaction')" -gt 0 ];then
 	echo -en $cRESET
+	flock -u $FD					# v1.15
 	exit 99
 fi
 
@@ -486,4 +586,5 @@ else
 	service start_reboot							# Default REBOOT
 fi
 
+flock -u $FD				# v1.15
 echo -e $cRESET"\n"

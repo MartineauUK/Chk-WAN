@@ -1,6 +1,6 @@
 #!/bin/sh
-VER="v1.15"
-#============================================================================================ © 2016-2020 Martineau v1.15
+VER="v1.16"
+#============================================================================================ © 2016-2021 Martineau v1.16
 #
 # Monitor WAN connection state using PINGs to multiple hosts, or a single cURL 15 Byte data request and optionally a 12MB/500B WGET/CURL data transfer.
 #         NOTE: The cURL data transfer rate/perfomance threshold may also be checked e.g. to switch from a 'slow' (Dual) WAN interface.
@@ -463,7 +463,8 @@ while [ $FAIL_CNT -lt $MAX_FAIL_CNT ]; do
 		IP=
 
 		# Check if PING target is 'private'; indicating ASUS is behind another router (double NAT) or DNS is a local server
-		if [ -n "$(echo $TARGET | Is_Private_IPv4)" ];then
+		#       or in AP mode '0.0.0.0' is invalid. Thanks @alexhk https://github.com/MartineauUK/Chk-WAN/issues/5
+		if [ -n "$(echo $TARGET | Is_Private_IPv4)" ] || [ "$TARGET" == "0.0.0.0" ];then	# v1.16
 				Say "Private LAN" $TARGET "will be skipped for WAN PING check!"
 				continue
 		else

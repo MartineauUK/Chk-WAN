@@ -1,8 +1,8 @@
 #!/bin/sh
-VER="v1.16"
-#============================================================================================ © 2016-2021 Martineau v1.16
+VER="v1.17"
+#============================================================================================ © 2016-2021 Martineau v1.17
 #
-# Monitor WAN connection state using PINGs to multiple hosts, or a single cURL 15 Byte data request and optionally a 12MB/500B WGET/CURL data transfer.
+# Monitor WAN connection state using PINGs to multiple hosts, or a single cURL 15 Byte data request and optionally a 10MB/500B WGET/CURL data transfer.
 #         NOTE: The cURL data transfer rate/perfomance threshold may also be checked e.g. to switch from a 'slow' (Dual) WAN interface.
 #         Usually the Recovery action (REBOOT or restart the WAN) occurs in about 90 secs (PING ONLY) or in about 03:30 mins for 'force' data download
 #
@@ -13,7 +13,7 @@ VER="v1.16"
 #           ChkWAN
 #                   Will REBOOT router if the PINGs to ALL of the hosts FAILS
 #           ChkWAN  force
-#                   Will REBOOT router if the PINGs to ALL of the hosts FAIL, but after each group PING attempt, a physical 12MByte data download is attempted.
+#                   Will REBOOT router if the PINGs to ALL of the hosts FAIL, but after each group PING attempt, a physical 10MByte data download is attempted.
 #           ChkWAN  forcesmall
 #                   Will REBOOT router if the PINGs to ALL of the hosts FAIL, but after each group PING attempt, a physical 500Byte data download is attempted.
 #                   (For users on a metered connection assuming that the 15Byte cURL is deemed unreliable?)
@@ -44,7 +44,7 @@ VER="v1.16"
 #           ChkWAN  tries=1 fails=1
 #                   Reduce the number of retry attempts to 1 instead of the default 3 and maximum number of fails is 1 rather than 3
 #           ChkWAN  force curlrate=1000000
-#                   If the 12MB average curl transfer rate is <1000000 Bytes per second (1MB), then treat this as a FAIL
+#                   If the 10MB average curl transfer rate is <1000000 Bytes per second (1MB), then treat this as a FAIL
 #           ChkWAN  curl verbose
 #                   The 'verbose' directive applies to any cURL transfer, and will display the cURL request data transfer as it happens
 #
@@ -158,8 +158,9 @@ Check_WAN(){
 				TXT_RATE="NOTE: Transfer rate must be faster than "$FORCE_WGET_MIN_RATE" Bytes/sec"
 			fi
 			echo -en $cBWHT"\n"
-			CURL_TXT="Starting cURL 'big' data transfer.....(Expect 12MB approx @3.1MB/sec on 20Mbps download = 00:04 secs)"
+			CURL_TXT="Starting cURL 'big' data transfer.....(Expect 10MB approx @3.1MB/sec on 20Mbps download = 00:04 secs)"
 			if [ "$2" == "$FORCE_WGET_500B" ];then
+				#CURL_TXT="Starting cURL 'small' data transfer.....(Expect 500Byte download = <1 second)"
 				CURL_TXT="Starting cURL 'small' data transfer.....(Expect 500Byte download = <1 second)"
 			fi
 			Say $CURL_TXT
@@ -179,7 +180,7 @@ Check_WAN(){
 		if { [ $RC18 -eq 18 ] || [ $RC -eq 0 ]; } && [ $(echo $RESULTS | cut -d',' -f5) -gt 0 ];then		# v1.14 RC=0 yet bytes transferred=0 WTF!!!! so treat as error.
 			[ $RC18 -eq 18 ] &&  { echo -e $cBRED; TXTINTERRUPTED="**Warning: INTERRUPTED; i.e. cut-short"; }	# v1.12 Mark interrupted transfer results as 'error'
 			case "$2" in
-				"$FORCE_WGET_12MB") Say "$TXTINTERRUPTED cURL $(($(echo $RESULTS | cut -d',' -f5)/1000000))MByte transfer took:" $(printf "00:%05.2f secs @%6.0f B/sec" "$(echo $RESULTS | cut -d',' -f2)" "$(echo $RESULTS | cut -d',' -f3)")
+				"$FORCE_WGET_10MB") Say "$TXTINTERRUPTED cURL $(($(echo $RESULTS | cut -d',' -f5)/1000000))MByte transfer took:" $(printf "00:%05.2f secs @%6.0f B/sec" "$(echo $RESULTS | cut -d',' -f2)" "$(echo $RESULTS | cut -d',' -f3)")
 									;;
 				"$FORCE_WGET_500B") Say "$TXTINTERRUPTED cURL $(($(echo $RESULTS | cut -d',' -f5)))Byte transfer took:" $(printf "00:%05.2f secs @%6.0f B/sec" "$(echo $RESULTS | cut -d',' -f2)" "$(echo $RESULTS | cut -d',' -f3)")
 									;;
@@ -239,8 +240,11 @@ SNAME="${0##*/}"							# Script name
 
 METHOD=
 ACTION="REBOOT"
-FORCE_WGET_500B="http://proof.ovh.net/files/md5sum.txt"
-FORCE_WGET_12MB="http://proof.ovh.net/files/100Mb.dat"
+#FORCE_WGET_500B="http://proof.ovh.net/files/md5sum.txt"
+FORCE_WGET_500B="https://raw.githubusercontent.com/MartineauUK/Chk-WAN/master/Test500B.txt"	# v1.17 ovh.net is AWOL	
+#FORCE_WGET_5MB="http://cachefly.cachefly.net/5mb.test"		# v1.17 ovh.net is AWOL
+#FORCE_WGET_12MB="http://proof.ovh.net/files/100Mb.dat"
+FORCE_WGET_10MB="http://cachefly.cachefly.net/10mb.test"	# v1.17 ovh.net is AWOL
 FORCE_WGET=
 FORCE_OK=0
 FORCE_WGET_MIN_RATE=0										# v1.09 Minimum acceptable transfer rate in Bytes per second
@@ -309,7 +313,8 @@ if [ -n "$1" ];then
 		if [ "$(echo $@ | grep -cw 'forcesmall')" -gt 0 ];then
 			FORCE_WGET=$FORCE_WGET_500B
 		else
-			FORCE_WGET=$FORCE_WGET_12MB
+			#FORCE_WGET=$FORCE_WGET_10MB
+			FORCE_WGET=$FORCE_WGET_10MB						# v1.17			
 		fi
 
 
@@ -496,8 +501,8 @@ while [ $FAIL_CNT -lt $MAX_FAIL_CNT ]; do
 		fi
 
 		if [ "$FORCE_OK" -eq 1 ];then
-			if [ "$FORCE_WGET" == "$FORCE_WGET_12MB" ];then
-				TXT="using 'default' 12MByte cURL data transfer OK"
+			if [ "$FORCE_WGET" == "$FORCE_WGET_10MB" ];then
+				TXT="using 'default' 10MByte cURL data transfer OK"
 			else
 				TXT="using 'small' ~500Byte cURL data transfer OK"
 			fi

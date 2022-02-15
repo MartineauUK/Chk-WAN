@@ -98,7 +98,12 @@ You can manually test the script with the default PING method, and the script wi
 
 but for automated monitoring, you would include the call to the script in
 
-/jffs/scripts/wan-start
+~~/jffs/scripts/wan-start~~
+see deprecated https://github.com/RMerl/asuswrt-merlin.ng/wiki/User-scripts#wan-start
+
+/jffs/scripts/wan-event see https://github.com/RMerl/asuswrt-merlin.ng/wiki/User-scripts#wan-event
+
+    chmod 755 /jffs/scripts/wan-event
 	
 	sh /jffs/scripts/ChkWAN.sh &
 

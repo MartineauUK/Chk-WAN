@@ -103,9 +103,18 @@ see deprecated https://github.com/RMerl/asuswrt-merlin.ng/wiki/User-scripts#wan-
 
 /jffs/scripts/wan-event see https://github.com/RMerl/asuswrt-merlin.ng/wiki/User-scripts#wan-event
 
-    chmod 755 /jffs/scripts/wan-event
+e.g the following can be pasted into a SSH terminal (assuming '/jffs/scripts/wan-event' doesn't aleady exist)
 	
-	sh /jffs/scripts/ChkWAN.sh &
+    cat > /jffs/scripts/wan-event << EOF;chmod +x /jffs/scripts/wan-event
+    #!/bin/sh
 
-or use cru (cron) to schedule the script at a pre-determined scheduled time)
+    if [ "\$2" == "connected" ];then
+       #sleep 5
+       # No need for recommended 'sleep n' as ChkWAN.sh has default 10 secs delay
+       # Check WAN connectivity every 30 seconds
+       sh /jffs/scripts/CHKWAN.sh &
+    fi
+    EOF
+
+or preferably use cru (cron) to schedule the script at a pre-determined scheduled time
 NOTE: You could configure the cron schedule such that the scipt will restart the WAN say 3 times, but every fourth attempt will action the REBOOT.

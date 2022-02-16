@@ -111,10 +111,24 @@ e.g the following can be pasted into a SSH terminal (assuming '/jffs/scripts/wan
     if [ "\$2" == "connected" ];then
        #sleep 5
        # No need for recommended 'sleep n' as ChkWAN.sh has default 10 secs delay
-       # Check WAN connectivity every 30 seconds
+       # Check WAN connectivity every 30 seconds (Possibly excessive!)
        sh /jffs/scripts/CHKWAN.sh &
     fi
     EOF
 
 or preferably use cru (cron) to schedule the script at a pre-determined scheduled time
+
+e.g. Every 5 minutes
+
+    cat > /jffs/scripts/wan-event << EOF;chmod +x /jffs/scripts/wan-event
+    #!/bin/sh
+
+    if [ "\$2" == "connected" ];then
+       # sleep 5
+       # No need for recommended 'sleep n' as ChkWAN.sh has default 10 secs delay
+       # Check WAN connectivity every 5 minutes
+       sh /jffs/scripts/ChkWAN.sh cron="\*/5 \* \* \* \*" &
+    fi
+    EOF
+
 NOTE: You could configure the cron schedule such that the scipt will restart the WAN say 3 times, but every fourth attempt will action the REBOOT.

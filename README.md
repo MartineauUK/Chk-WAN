@@ -103,7 +103,7 @@ see deprecated https://github.com/RMerl/asuswrt-merlin.ng/wiki/User-scripts#wan-
 
 /jffs/scripts/wan-event see https://github.com/RMerl/asuswrt-merlin.ng/wiki/User-scripts#wan-event
 
-e.g the following can be pasted into a SSH terminal (assuming '/jffs/scripts/wan-event' doesn't aleady exist)
+e.g the following can be pasted into a SSH terminal (assuming '/jffs/scripts/wan-event' doesn't already exist)
 	
     cat > /jffs/scripts/wan-event << EOF;chmod +x /jffs/scripts/wan-event
     #!/bin/sh

@@ -131,4 +131,11 @@ e.g. Every 5 minutes
     fi
     EOF
 
+Check cru (cron)
+
+    cru l
+    
+    */5 * * * * /jffs/scripts/ChkWAN.sh #WAN_Check#
+
+
 NOTE: You could configure the cron schedule such that the scipt will restart the WAN say 3 times, but every fourth attempt will action the REBOOT.

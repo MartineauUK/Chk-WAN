@@ -99,11 +99,11 @@ You can manually test the script with the default PING method, and the script wi
 but for automated monitoring, you would include the call to the script in
 
 ~~/jffs/scripts/wan-start~~
-see deprecated https://github.com/RMerl/asuswrt-merlin.ng/wiki/User-scripts#wan-start
+deprecated https://github.com/RMerl/asuswrt-merlin.ng/wiki/User-scripts#wan-start
 
 /jffs/scripts/wan-event see https://github.com/RMerl/asuswrt-merlin.ng/wiki/User-scripts#wan-event
 
-e.g the following can be pasted into a SSH terminal (assuming '/jffs/scripts/wan-event' doesn't already exist)
+e.g. The following can be pasted into a SSH terminal (assuming **__'/jffs/scripts/wan-event'__** doesn't already exist)
 	
     cat > /jffs/scripts/wan-event << EOF;chmod +x /jffs/scripts/wan-event
     #!/bin/sh
@@ -131,7 +131,7 @@ e.g. Every 5 minutes
     fi
     EOF
 
-Check cru (cron)
+Check desired cru (cron) schedule has been created
 
     cru l
     

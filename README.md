@@ -131,6 +131,17 @@ e.g. Every 5 minutes
     fi
     EOF
 
+e.g. Every 3 minutes with arguments (report status, no wait and fails=1)
+
+    cat > /jffs/scripts/wan-event << EOF;chmod +x /jffs/scripts/wan-event
+    #!/bin/sh
+
+    if [ "\$2" == "connected" ];then
+       # Check WAN connectivity every 3 minutes
+       cru a WAN_Check "*/3 * * * * /jffs/scripts/ChkWAN.sh wan status nowait fails=1" &
+    fi
+    EOF
+
 Check desired cru (cron) schedule has been created
 
     cru l

@@ -112,7 +112,7 @@ e.g. The following can be pasted into a SSH terminal (assuming **__'/jffs/script
        #sleep 5
        # No need for recommended 'sleep n' as ChkWAN.sh has default 10 secs delay
        # Check WAN connectivity every 30 seconds (Possibly excessive!)
-       sh /jffs/scripts/CHKWAN.sh &
+       sh /jffs/scripts/ChkWAN.sh &
     fi
     EOF
 
